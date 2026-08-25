@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GummyTap - Telegram Mini App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 1rem;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 95vh;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .card {
+      background: #1e293b;
+      padding: 1.2rem;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 360px;
+      box-sizing: border-box;
+      border: 1px solid #334155;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+    .network-badge {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border: 1px dashed #f59e0b;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: bold;
+      margin-bottom: 0.8rem;
+      display: inline-block;
+    }
+    .banner { width: 100%; border-radius: 12px; margin-bottom: 0.6rem; }
+    h2 { color: #f59e0b; margin: 0.2rem 0; font-size: 1.3rem; }
+    p { font-size: 0.85rem; color: #94a3b8; line-height: 1.4; }
+
+    .btn {
+      background: #f59e0b;
+      color: #000;
+      border: none;
+      padding: 0.9rem;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 0.6rem;
+      transition: all 0.2s ease;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
+    .btn-secondary { background: #334155; color: #f8fafc; }
+    .btn-danger { background: #ef4444; color: #fff; }
+
+    .glass-container {
+      width: 110px;
+      height: 150px;
+      border: 3px solid #94a3b8;
+      border-top: none;
+      border-radius: 0 0 16px 16px;
+      margin: 1rem auto;
+      position: relative;
+      overflow: hidden;
+      background: rgba(255,255,255,0.05);
+    }
+    .beer-liquid {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0%;
+      background: #e11d48;
+      transition: height 0.15s ease;
+    }
+    .beer-foam {
+      position: absolute;
+      top: -8px;
+      left: 0;
+      width: 100%;
+      height: 8px;
+      background: #ffffff;
+      opacity: 0.85;
+    }
+    .metrics {
+      display: flex;
+      justify-content: space-around;
+      margin: 0.8rem 0;
+      background: #0f172a;
+      padding: 0.8rem;
+      border-radius: 10px;
+    }
+    .metric-value { font-size: 1.3rem; font-weight: bold; color: #38bdf8; }
+    .metric-label { font-size: 0.75rem; color: #94a3b8; }
+    .wallet-badge {
+      font-size: 0.75rem;
+      background: #0f172a;
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      color: #38bdf8;
+      word-break: break-all;
+      margin-bottom: 0.8rem;
+      border: 1px solid #334155;
+    }
+    .explorer-link {
+      color: #38bdf8;
+      word-break: break-all;
+      font-size: 0.75rem;
+      margin: 0.8rem 0;
+      display: block;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TELA 1 -->
+  <div id="stepScan" class="card">
+    <div class="network-badge">🟢 SOLANA DEVNET ATIVA</div>
+    <img src="/suco_gummy.png" alt="Suco Gummy" class="banner" />
+    <div id="walletDisplay" class="wallet-badge" onclick="copyWalletPubkey()" style="cursor: pointer;">
+      Carregando carteira...
+    </div>
+    <h2>🍺 Chopeira GummyTap</h2>
+    <p>Escaneie o QR Code na máquina para liberar a torneira via Solana Devnet.</p>
+    
+    <button class="btn" id="btnScan" onclick="startScanFlow()">INICIAR & ESCANEAR QR CODE</button>
+  </div>
+
+  <!-- TELA 2 -->
+  <div id="stepPour" class="card" style="display: none;">
+    <div class="network-badge">🟢 SESSÃO ON-CHAIN ATIVA</div>
+    <h2>🍹 Servindo Suco Gummy</h2>
+    <p id="pourStatus" style="color: #10b981; font-weight: bold; margin: 0.2rem 0;">Torneira Conectada!</p>
+
+    <div class="glass-container">
+      <div id="beerFill" class="beer-liquid">
+        <div class="beer-foam"></div>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div>
+        <div id="volServed" class="metric-value">0 ml</div>
+        <div class="metric-label">Volume</div>
+      </div>
+      <div>
+        <div id="costTotal" class="metric-value">0.00 USDC</div>
+        <div class="metric-label">Custo</div>
+      </div>
+    </div>
+
+    <button id="btnToggleTap" class="btn" onclick="toggleTap()">ABRIR TORNEIRA (SERVIR)</button>
+  </div>
+
+  <!-- TELA 3 -->
+  <div id="stepReceipt" class="card" style="display: none;">
+    <div style="font-size: 2.2rem; margin-bottom: 0.3rem;">🎉🍹</div>
+    <h2 style="color: #10b981;">Pagamento Confirmado!</h2>
+    
+    <div class="metrics" style="margin-top: 1rem;">
+      <div>
+        <div id="finalVol" class="metric-value">0 ml</div>
+        <div class="metric-label">Total Servido</div>
+      </div>
+      <div>
+        <div id="finalCost" class="metric-value">0.00 USDC</div>
+        <div class="metric-label">Total Pago</div>
+      </div>
+    </div>
+
+    <p style="font-size: 0.8rem; color: #94a3b8;">Recibo da liquidação na Solana Devnet:</p>
+    <a id="txExplorerLink" class="explorer-link" target="_blank">Ver transação no Solana Explorer ↗</a>
+
+    <button class="btn btn-secondary" onclick="resetToScan()">← RETORNAR AO INÍCIO</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const connection = new solanaWeb3.Connection("https://api.devnet.solana.com", "confirmed");
+    let userKeypair = null;
+    let isPouring = false;
+    let ml = 0;
+    let pourTimer = null;
+    let resolvedDestination = "";
+
+    window.onload = async () => {
+      let secret = localStorage.getItem('gummytap_wallet_secret');
+      if (secret) {
+        userKeypair = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secret)));
+      } else {
+        userKeypair = solanaWeb3.Keypair.generate();
+        localStorage.setItem('gummytap_wallet_secret', JSON.stringify(Array.from(userKeypair.secretKey)));
+      }
+      
+      const pubkeyStr = userKeypair.publicKey.toBase58();
+      document.getElementById('walletDisplay').innerText = `💳 Carteira: ${pubkeyStr.slice(0,6)}...${pubkeyStr.slice(-4)} (Copiar)`;
+    };
+
+    // Extrai a chave pública real mesmo se o QR Code for URL / Solana Pay
+    function extractSolanaAddress(rawText) {
+      let text = decodeURIComponent(rawText.trim());
+      if (text.startsWith("solana:")) text = text.replace("solana:", "");
+      
+      // Procura parâmetro reference=CHAVE ou recipient
+      if (text.includes("reference=")) {
+        const match = text.match(/reference=([A-Za-z0-9]{32,44})/);
+        if (match) return match[1];
+      }
+      if (text.includes("recipient=")) {
+        const match = text.match(/recipient=([A-Za-z0-9]{32,44})/);
+        if (match) return match[1];
+      }
+
+      // Procura por qualquer base58 válida de 32 a 44 caracteres
+      const matchPubkey = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
+      return matchPubkey ? matchPubkey[0] : text;
+    }
+
+    function startScanFlow() {
+      if (tg && typeof tg.showScanQrPopup === 'function') {
+        tg.showScanQrPopup({ text: "Aponte para o QR Code da Chopeira" }, (qrText) => {
+          tg.closeScanQrPopup();
+          const targetAddress = extractSolanaAddress(qrText);
+          alert("📸 QR CODE PROCESSADO!\n\nOriginal:\n" + qrText + "\n\nEndereço Extraído:\n" + targetAddress);
+          signAndAuthorize(targetAddress);
+          return true;
+        });
+      } else {
+        const mock = prompt("Cole o QR Code ou endereço:", "solana:https%3A%2F%2Fexample.com%2Fpay%3Freference%3DA8rhqYNqAZxoJyyV4XR5cgf6LoG1VCmbDpmdTa28a8m3");
+        if (mock) {
+          const targetAddress = extractSolanaAddress(mock);
+          alert("📸 Endereço Extraído:\n" + targetAddress);
+          signAndAuthorize(targetAddress);
+        }
+      }
+    }
+
+    async function signAndAuthorize(targetAddressStr) {
+      tg?.HapticFeedback?.impactOccurred('medium');
+      const btn = document.getElementById('btnScan');
+      btn.disabled = true;
+      btn.innerText = "Assinando na Devnet...";
+      resolvedDestination = targetAddressStr;
+
+      try {
+        const res = await fetch('/api/prepare-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerPubkey: userKeypair.publicKey.toBase58(),
+            targetAddress: targetAddressStr
+          })
+        });
+
+        const textResp = await res.text();
+        let data;
+        try {
+          data = JSON.parse(textResp);
+        } catch {
+          throw new Error("Resposta do servidor não foi JSON: " + textResp.slice(0, 100));
+        }
+
+        if (!data.success) throw new Error(data.error);
+
+        // Assinatura real na Devnet
+        const tx = solanaWeb3.Transaction.from(Uint8Array.from(atob(data.transactionBase64), c => c.charCodeAt(0)));
+        tx.partialSign(userKeypair);
+
+        const rawTx = tx.serialize();
+        const txSig = await connection.sendRawTransaction(rawTx);
+        await connection.confirmTransaction(txSig, "confirmed");
+
+        await fetch('/api/start-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerPubkey: userKeypair.publicKey.toBase58(),
+            destinationAddress: targetAddressStr,
+            authTxSig: txSig
+          })
+        });
+
+        tg?.HapticFeedback?.notificationOccurred('success');
+        btn.disabled = false;
+        btn.innerText = "INICIAR & ESCANEAR QR CODE";
+        document.getElementById('stepScan').style.display = 'none';
+        document.getElementById('stepPour').style.display = 'block';
+
+      } catch (err) {
+        console.error(err);
+        tg?.HapticFeedback?.notificationOccurred('error');
+        alert("Falha on-chain: " + (err.message || err));
+        btn.disabled = false;
+        btn.innerText = "INICIAR & ESCANEAR QR CODE";
+      }
+    }
+
+    function toggleTap() {
+      const btn = document.getElementById('btnToggleTap');
+      const statusText = document.getElementById('pourStatus');
+
+      if (!isPouring) {
+        isPouring = true;
+        tg?.HapticFeedback?.impactOccurred('heavy');
+        btn.innerText = "PARAR TORNEIRA";
+        btn.className = "btn btn-danger";
+        statusText.innerText = "Servindo bebida...";
+        statusText.style.color = "#f59e0b";
+
+        pourTimer = setInterval(() => {
+          if (ml < 500) {
+            ml += 15;
+            updatePourUI();
+            fetch('/api/pulse', { method: 'POST' });
+          } else {
+            toggleTap();
+          }
+        }, 120);
+      } else {
+        clearInterval(pourTimer);
+        isPouring = false;
+        tg?.HapticFeedback?.impactOccurred('medium');
+        btn.disabled = true;
+        btn.innerText = "Liquidando on-chain...";
+
+        fetch('/api/settle', { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              tg?.HapticFeedback?.notificationOccurred('success');
+              
+              alert(
+                "✅ PAGAMENTO LIQUIDADO NA SOLANA DEVNET!\n\n" +
+                "• Destino Pago: " + data.destination + "\n" +
+                "• Volume: " + data.mlServed + " ml\n" +
+                "• Valor: " + (data.mlServed * 0.01).toFixed(2) + " USDC\n\n" +
+                "• Hash da Transação:\n" + data.txHash
+              );
+
+              document.getElementById('finalVol').innerText = `${data.mlServed} ml`;
+              document.getElementById('finalCost').innerText = `${(data.mlServed * 0.01).toFixed(2)} USDC`;
+              document.getElementById('txExplorerLink').href = `https://explorer.solana.com/tx/${data.txHash}?cluster=devnet`;
+              document.getElementById('stepPour').style.display = 'none';
+              document.getElementById('stepReceipt').style.display = 'block';
+            } else {
+              alert("Erro na liquidação: " + data.error);
+              btn.disabled = false;
+              btn.innerText = "TENTAR FECHAR NOVAMENTE";
+            }
+          })
+          .catch((err) => {
+            alert("Erro ao liquidar: " + err.message);
+            btn.disabled = false;
+          });
+      }
+    }
+
+    function updatePourUI() {
+      document.getElementById('volServed').innerText = `${ml} ml`;
+      document.getElementById('costTotal').innerText = `${(ml * 0.01).toFixed(2)} USDC`;
+      const pct = Math.min((ml / 500) * 100, 100);
+      document.getElementById('beerFill').style.height = `${pct}%`;
+    }
+
+    function resetToScan() {
+      ml = 0;
+      updatePourUI();
+      document.getElementById('btnToggleTap').disabled = false;
+      document.getElementById('btnToggleTap').className = "btn";
+      document.getElementById('btnToggleTap').innerText = "ABRIR TORNEIRA (SERVIR)";
+      document.getElementById('stepReceipt').style.display = 'none';
+      document.getElementById('stepScan').style.display = 'block';
+    }
+
+    function copyWalletPubkey() {
+      const pubkeyStr = userKeypair.publicKey.toBase58();
+      navigator.clipboard.writeText(pubkeyStr).then(() => {
+        tg?.HapticFeedback?.notificationOccurred('success');
+        alert("Chave Pública copiada:\n" + pubkeyStr);
+      });
+    }
+  </script>
+</body>
+</html>
