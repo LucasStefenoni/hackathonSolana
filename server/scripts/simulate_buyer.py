@@ -3,20 +3,22 @@ Stands in for a wallet app scanning the Solana Pay QR code, so the full
 payment flow can be tested against localhost without a public tunnel URL.
 
 Usage:
-    python -m main                     # terminal 1: starts the machine, prints a reference
-    python -m scripts.simulate_buyer <reference>   # terminal 2: "pays" for that order
+    make run                    # terminal 1: starts the machine, prints a reference
+    make logs                   # terminal 2: watch the server logs
+    make simulate REF=<reference>   # terminal 3: "pays" for that order
 """
+
 import base64
 import json
 import sys
 import time
 
 import requests
-from solders.keypair import Keypair
 from solders.hash import Hash
+from solders.keypair import Keypair
 from solders.transaction import Transaction
 
-from payments.solana_rpc import get_latest_blockhash, get_balance, request_airdrop, send_transaction
+from payments.solana_rpc import get_balance, get_latest_blockhash, request_airdrop, send_transaction
 
 LOCAL_PAY_ENDPOINT = "http://localhost:5000/pay"
 KEYPAIR_PATH = ".local_buyer_keypair.json"
