@@ -1,0 +1,40 @@
+[project]
+name = "GummyTap"
+version = "0.1.0"
+description = "Pay-as-you-consume"
+requires-python = ">=3.10"
+dependencies = [
+    "requests",
+    "qrcode",
+    "flask",
+    "solders",
+    "python-dotenv",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+    "SIM105",  # try/except/pass is intentional in hardware/shutdown cleanup paths
+    "B904",    # not every re-raise needs `from exc` here
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"conftest.py" = ["E402"]  # env must be set before importing config
