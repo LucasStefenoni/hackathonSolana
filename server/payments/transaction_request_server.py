@@ -121,3 +121,67 @@ def run_server_in_background(host="0.0.0.0", port=5000):
     )
     thread.start()
     return thread
+
+global_flow_meter = None
+global_valve = None
+
+def init_hardware(flow_meter_inst, valve_inst):
+    global global_flow_meter, global_valve
+    global_flow_meter = flow_meter_inst
+    global_valve = valve_inst
+
+@app.route("/start", methods=["POST"])
+def start_tap():
+    data = request.get_json(force=True, silent=True) or {}
+    reference_str = data.get("reference")
+    log.info("POST /start acionado para reference=%s", reference_str)
+    
+    order = store.get(reference_str)
+    if order is None:
+        return jsonify({"success": False, "error": "Pedido não encontrado ou expirado"}), 404
+        
+    try:
+        store.mark_dispensing(reference_str)
+        # Se você tiver a instância da válvula aqui, pode abri-la:
+        if global_valve:
+            global_valve.open() # ou global_valve.dispensing() conforme sua lib
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Transição inválida: {str(e)}"}), 400
+
+    return jsonify({"success": True, "message": "Válvula aberta com sucesso"})
+
+
+@app.route("/stop", methods=["POST"])
+def stop_tap():
+    data = request.get_json(force=True, silent=True) or {}
+    reference_str = data.get("reference")
+    buyer_pubkey_str = data.get("account")
+    log.info("POST /stop acionado para reference=%s buyer=%s", reference_str, buyer_pubkey_str)
+    
+    order = store.get(reference_str)
+    if order is None:
+        return jsonify({"success": False, "error": "Pedido não encontrado"}), 404
+
+    try:
+        # Fecha a válvula imediatamente
+        if global_valve:
+            global_valve.close()
+
+        # Pega o volume real medido pelo sensor se houver
+        dispensed_ml = global_flow_meter.volume_ml() if global_flow_meter else 100.0
+        
+        store.mark_settling(reference_str, dispensed_ml)
+        
+        deposit = order.deposit_lamports
+        charged = min(int(dispensed_ml * LAMPORTS_PER_ML), deposit)
+        refund_lamports = deposit - charged
+        
+        store.mark_settled(reference_str, charged, refund_lamports, refund_signature=None)
+    except Exception as e:
+        log.exception("Erro ao processar parada/reembolso")
+        return jsonify({"success": False, "error": f"Erro no reembolso: {str(e)}"}), 500
+    
+    return jsonify({
+        "success": True, 
+        "message": "Chopeira parada e reembolso processados com sucesso!"
+    })
