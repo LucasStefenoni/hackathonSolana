@@ -64,6 +64,15 @@ RECIPIENT_SECRET_KEY = os.environ.get("RECIPIENT_SECRET_KEY")
 
 LAMPORTS_PER_ML = _int("LAMPORTS_PER_ML", 200)
 
+# SOL->BRL price feed for the terminal display. Any endpoint returning
+# {"solana": {"brl": <number>}} works; failures just hide the R$ figure.
+PRICE_API_URL = os.environ.get(
+    "PRICE_API_URL",
+    "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=brl",
+)
+# how long a fetched price is reused before refreshing
+PRICE_CACHE_TTL_S = _int("PRICE_CACHE_TTL_S", 60)
+
 LABEL = os.environ.get("LABEL", "GummyTap pay-as-you-consume")
 
 # --- robustness knobs (see .env.example for what each one does) ---
