@@ -35,6 +35,13 @@ class PaymentInvalid(RpcError):
 class PaymentVerification:
     signature: str
     amount_lamports: int
+    buyer: str | None = None
+
+
+# JSON-RPC error 'err' values that mean "try again with a fresh blockhash" rather
+# than "this transaction is bad". The refund send loop rebuilds the tx with a new
+# blockhash on every attempt, so these are safe (and expected) to retry.
+_TRANSIENT_TX_ERRS = ("BlockhashNotFound",)
 
 
 def _build_session():
@@ -83,6 +90,11 @@ def rpc_call(method, params=None):
 
     log.debug("RPC <- %s %s", method, result)
     if "error" in result:
+        err = result["error"] or {}
+        data_err = (err.get("data") or {}).get("err") if isinstance(err, dict) else None
+        message = err.get("message", "") if isinstance(err, dict) else str(err)
+        if data_err in _TRANSIENT_TX_ERRS or "blockhash not found" in message.lower():
+            raise RpcTransientError(f"{method}: {message or data_err} (retry with fresh blockhash)")
         raise RpcResponseError(f"RPC error calling {method}: {result['error']}")
     return result["result"]
 
@@ -106,7 +118,13 @@ def get_transaction(signature):
 
 
 def send_transaction(signed_tx_b64):
-    return rpc_call("sendTransaction", [signed_tx_b64, {"encoding": "base64"}])
+    return rpc_call(
+        "sendTransaction",
+        [
+            signed_tx_b64,
+            {"encoding": "base64", "preflightCommitment": RPC_COMMITMENT, "maxRetries": 5},
+        ],
+    )
 
 
 def get_balance(pubkey_str):
@@ -149,12 +167,16 @@ def verify_payment(reference_str, expected_recipient, min_lamports):
         raise PaymentInvalid(f"transaction {signature} failed on-chain: {meta['err']}")
 
     account_keys = tx["transaction"]["message"]["accountKeys"]
+
+    def _key(k):
+        return k["pubkey"] if isinstance(k, dict) else k
+
+    # the fee payer / signer is always accountKeys[0] - this is who we refund,
+    # regardless of whether they came through the /pay transaction-request route
+    buyer = _key(account_keys[0]) if account_keys else None
+
     try:
-        idx = next(
-            i
-            for i, k in enumerate(account_keys)
-            if (k["pubkey"] if isinstance(k, dict) else k) == expected_recipient
-        )
+        idx = next(i for i, k in enumerate(account_keys) if _key(k) == expected_recipient)
     except StopIteration:
         raise PaymentInvalid(
             f"transaction {signature} does not touch the recipient account {expected_recipient}"
@@ -167,5 +189,5 @@ def verify_payment(reference_str, expected_recipient, min_lamports):
             f"expected at least {min_lamports}"
         )
 
-    log.info("verified payment %s: %d lamports to %s", signature, delta, expected_recipient)
-    return PaymentVerification(signature=signature, amount_lamports=delta)
+    log.info("verified payment %s: %d lamports to %s from %s", signature, delta, expected_recipient, buyer)
+    return PaymentVerification(signature=signature, amount_lamports=delta, buyer=buyer)

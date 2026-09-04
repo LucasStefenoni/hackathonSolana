@@ -100,12 +100,16 @@ class OrderStore:
             order.buyer = buyer
 
     def mark_paid(self, reference, verification):
-        return self._transition(
-            reference,
-            OrderState.PAID,
+        fields = dict(
             paid_signature=verification.signature,
             paid_amount=verification.amount_lamports,
         )
+        # fall back to the on-chain fee payer if /pay never recorded a buyer,
+        # but don't clobber a value that route already set
+        buyer = getattr(verification, "buyer", None)
+        if buyer and self._orders.get(reference) and self._orders[reference].buyer is None:
+            fields["buyer"] = buyer
+        return self._transition(reference, OrderState.PAID, **fields)
 
     def mark_dispensing(self, reference):
         return self._transition(reference, OrderState.DISPENSING)

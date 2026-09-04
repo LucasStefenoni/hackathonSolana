@@ -215,6 +215,11 @@ def settle(order, dispensed_ml, rate=None):
     )
     # journal BEFORE attempting the transfer so the obligation survives a crash
     refund_journal.record_owed(reference, buyer, refund_lamports, f"under-delivered order {reference}")
+    if not buyer:
+        store.mark_settled(reference, charged, refund_lamports, None)  # -> REFUND_OWED
+        log.error("refund for order %s owed but buyer unknown - journalled, needs manual payout", reference[:8])
+        print(f"refund OWED ({refund_lamports} lamports) - buyer address unknown, journalled for manual review")
+        return
     try:
         sig = send_refund(buyer, refund_lamports, note=f"refund for order {reference}")
     except Exception as exc:

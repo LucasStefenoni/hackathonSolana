@@ -17,7 +17,7 @@ MEMO_PROGRAM_ID = Pubkey.from_string("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcH
 
 log = logging.getLogger(__name__)
 
-_REFUND_SEND_ATTEMPTS = 3
+_REFUND_SEND_ATTEMPTS = 5
 
 
 def _load_keypair(secret):
@@ -68,5 +68,6 @@ def send_refund(buyer_pubkey_str, lamports, note="refund"):
             log.warning(
                 "refund send attempt %d/%d failed transiently: %s", attempt, _REFUND_SEND_ATTEMPTS, exc
             )
-            time.sleep(attempt)
+            if attempt < _REFUND_SEND_ATTEMPTS:
+                time.sleep(min(2 ** (attempt - 1), 8))
     raise RuntimeError(f"refund send failed after {_REFUND_SEND_ATTEMPTS} attempts: {last_exc}")
