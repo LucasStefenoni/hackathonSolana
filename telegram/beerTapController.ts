@@ -4,7 +4,7 @@ import "dotenv/config";
 
 const connection = new Connection(process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com", "confirmed");
 const TOKEN_MINT = new PublicKey(process.env.TOKEN_MINT!);
-const PRICE_PER_ML_UNITS = 10_000n; // 0.01 USDC por ml
+const PRICE_PER_ML_UNITS = 100_000n; // 0.01 USDC por ml
 const PULSES_PER_LITER = 450;
 
 export class BeerTapController {
